@@ -44,10 +44,74 @@ jobs:
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
+      - name: Lint
+        run: ./gradlew :app:lintDebug --no-daemon
+
       - name: Rename APK
         run: |
           mkdir -p artifacts
           cp app/build/outputs/apk/debug/app-debug.apk "artifacts/JitjiTodo-v${BUILD_NUMBER}.apk"
+
+      - name: Verify APK contents
+        run: |
+          set -e
+          APK="artifacts/JitjiTodo-v${BUILD_NUMBER}.apk"
+          BUILD_TOOLS="$ANDROID_HOME/build-tools"
+          AAPT=$(find "$BUILD_TOOLS" -name aapt2 | sort -r | head -n1)
+          echo "Using $AAPT"
+
+          DUMP=$("$AAPT" dump badging "$APK")
+          echo "--- badging ---"
+          echo "$DUMP" | head -30
+
+          fail=0
+          check() {
+            if echo "$DUMP" | grep -qF "$1"; then
+              echo "✓ $2"
+            else
+              echo "✗ MISSING: $2 ($1)"
+              fail=1
+            fi
+          }
+
+          check "package: name='com.jitji.todo'" "package name"
+          check "uses-permission: name='android.permission.POST_NOTIFICATIONS'" "POST_NOTIFICATIONS"
+          check "uses-permission: name='android.permission.FOREGROUND_SERVICE'" "FOREGROUND_SERVICE"
+          check "uses-permission: name='android.permission.FOREGROUND_SERVICE_SPECIAL_USE'" "FGS special use"
+          check "uses-permission: name='android.permission.SCHEDULE_EXACT_ALARM'" "SCHEDULE_EXACT_ALARM"
+          check "uses-permission: name='android.permission.RECEIVE_BOOT_COMPLETED'" "RECEIVE_BOOT_COMPLETED"
+          check "uses-permission: name='android.permission.REQUEST_INSTALL_PACKAGES'" "REQUEST_INSTALL_PACKAGES"
+          check "uses-permission: name='android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS'" "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
+          check "uses-permission: name='android.permission.INTERNET'" "INTERNET (for update)"
+
+          echo "--- manifest xmltree ---"
+          MAN=$("$AAPT" dump xmltree "$APK" AndroidManifest.xml)
+          echo "$MAN" | grep -E 'activity|service|receiver|provider' | head -40
+
+          checkm() {
+            if echo "$MAN" | grep -qF "$1"; then
+              echo "✓ $2"
+            else
+              echo "✗ MISSING in manifest: $2"
+              fail=1
+            fi
+          }
+          checkm "LockscreenService" "LockscreenService declared"
+          checkm "RestartReceiver" "RestartReceiver declared"
+          checkm "BootReceiver" "BootReceiver declared"
+          checkm "ReminderReceiver" "ReminderReceiver declared"
+          checkm "FileProvider" "FileProvider declared"
+          checkm "foregroundServiceType" "foregroundServiceType set"
+
+          echo "--- signing fingerprint ---"
+          KEYTOOL_OUT=$(keytool -printcert -jarfile "$APK" 2>/dev/null | head -40 || true)
+          echo "$KEYTOOL_OUT" | grep -i 'sha-256\|owner' || true
+
+          if [ $fail -ne 0 ]; then
+            echo "APK verification FAILED"
+            exit 1
+          fi
+          echo "All APK checks passed ✓"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
