@@ -82,7 +82,32 @@ class MainActivity : AppCompatActivity() {
         LockscreenService.start(this)
         ServiceWatchdog.scheduleHeartbeat(this)
         promptBatteryOptimizationIfNeeded()
-        promptHomeAppIfNeeded()
+        promptRevertHomeIfNeeded()
+    }
+
+    private fun promptRevertHomeIfNeeded() {
+        val prefs = getSharedPreferences("jitji", MODE_PRIVATE)
+        if (prefs.getBoolean("revert_home_prompted", false)) return
+        prefs.edit().putBoolean("revert_home_prompted", true).apply()
+        AlertDialog.Builder(this)
+            .setTitle("홈 앱 되돌리기")
+            .setMessage(
+                "이전 버전에서 이 앱을 기본 홈 앱으로 설정했었습니다. " +
+                    "이제 홈 런처 기능을 제거했으니 원래 쓰던 런처로 되돌려주세요.\n\n" +
+                    "'설정 열기'를 누르면 홈 앱 선택 화면이 나옵니다."
+            )
+            .setPositiveButton("설정 열기") { _, _ ->
+                runCatching { startActivity(Intent(Settings.ACTION_HOME_SETTINGS)) }
+                    .onFailure {
+                        runCatching {
+                            val i = Intent(Intent.ACTION_MAIN)
+                            i.addCategory(Intent.CATEGORY_HOME)
+                            startActivity(Intent.createChooser(i, "홈 앱 선택"))
+                        }
+                    }
+            }
+            .setNegativeButton("나중에", null)
+            .show()
     }
 
     override fun onResume() {
@@ -135,53 +160,8 @@ class MainActivity : AppCompatActivity() {
             R.id.action_check_update -> { checkUpdate(); true }
             R.id.action_clear_done -> { viewModel.deleteCompleted(); true }
             R.id.action_battery_opt -> { openBatterySettings(); true }
-            R.id.action_set_home -> { openHomeAppChooser(); true }
             else -> super.onOptionsItemSelected(item)
         }
-    }
-
-    private fun openHomeAppChooser() {
-        AlertDialog.Builder(this)
-            .setTitle(R.string.set_as_home)
-            .setMessage(R.string.set_as_home_message)
-            .setPositiveButton(R.string.open_settings) { _, _ ->
-                runCatching {
-                    startActivity(Intent(Settings.ACTION_HOME_SETTINGS))
-                }.onFailure {
-                    runCatching {
-                        val intent = Intent(Intent.ACTION_MAIN)
-                        intent.addCategory(Intent.CATEGORY_HOME)
-                        startActivity(Intent.createChooser(intent, "홈 앱 선택"))
-                    }
-                }
-            }
-            .setNegativeButton(R.string.cancel, null)
-            .show()
-    }
-
-    private fun promptHomeAppIfNeeded() {
-        if (isDefaultHome()) return
-        val prefs = getSharedPreferences("jitji", MODE_PRIVATE)
-        val prompted = prefs.getBoolean("home_prompted", false)
-        if (prompted) return
-        prefs.edit().putBoolean("home_prompted", true).apply()
-        openHomeAppChooser()
-    }
-
-    override fun onBackPressed() {
-        if (isDefaultHome()) {
-            moveTaskToBack(true)
-            return
-        }
-        super.onBackPressed()
-    }
-
-    private fun isDefaultHome(): Boolean {
-        val intent = Intent(Intent.ACTION_MAIN).apply {
-            addCategory(Intent.CATEGORY_HOME)
-        }
-        val resolve = packageManager.resolveActivity(intent, 0) ?: return false
-        return resolve.activityInfo.packageName == packageName
     }
 
     private fun promptBatteryOptimizationIfNeeded() {

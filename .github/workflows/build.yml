@@ -99,7 +99,7 @@ jobs:
           checkm '.ReminderReceiver' "ReminderReceiver declared"
           checkm 'FileProvider' "FileProvider declared"
           checkm 'foregroundServiceType' "foregroundServiceType attribute"
-          checkm 'android.intent.category.HOME' "HOME category (launcher replacement)"
+          checkm 'android.permission.USE_FULL_SCREEN_INTENT' "USE_FULL_SCREEN_INTENT"
 
           echo "--- signing fingerprint ---"
           keytool -printcert -jarfile "$APK" 2>/dev/null | grep -E 'Owner|SHA-256' | head -6 || true
