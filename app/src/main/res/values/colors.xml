@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg">#3D3D3D</color>
+    <color name="bg_elev">#4A4A4A</color>
+    <color name="input_bg">#FFFFFF</color>
+    <color name="input_text">#212121</color>
+    <color name="input_hint">#9E9E9E</color>
+    <color name="send_btn_off">#BDBDBD</color>
+    <color name="send_btn_on">#4C6EF5</color>
+    <color name="white">#FFFFFF</color>
+    <color name="muted">#B0B0B0</color>
+    <color name="red">#FF6B6B</color>
+    <color name="divider">#2E2E2E</color>
+    <color name="ic_launcher_background">#3D3D3D</color>
+</resources>
