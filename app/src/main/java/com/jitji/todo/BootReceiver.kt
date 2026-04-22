@@ -15,15 +15,14 @@ class BootReceiver : BroadcastReceiver() {
             action != Intent.ACTION_LOCKED_BOOT_COMPLETED) return
 
         val appContext = context.applicationContext
+        LockscreenService.start(appContext)
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val repo = TaskRepository(appContext)
-                val pendingTasks = repo.allPending()
-                pendingTasks.forEach { task ->
+                repo.allPending().forEach { task ->
                     ReminderScheduler.schedule(appContext, task)
                 }
-                LockscreenNotification.refresh(appContext, pendingTasks)
             } finally {
                 pending.finish()
             }

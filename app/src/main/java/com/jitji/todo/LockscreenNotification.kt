@@ -1,16 +1,14 @@
 package com.jitji.todo
 
-import android.Manifest
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import androidx.core.content.ContextCompat
 
 object LockscreenNotification {
 
@@ -28,33 +26,21 @@ object LockscreenNotification {
         ).apply {
             description = "잠금화면에 계속 표시되는 할일 목록"
             setShowBadge(false)
-            lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             enableVibration(false)
             setSound(null, null)
         }
         nm.createNotificationChannel(channel)
     }
 
-    fun refresh(context: Context, tasks: List<Task>) {
+    fun build(context: Context, tasks: List<Task>): Notification {
         ensureChannel(context)
 
         val pending = tasks.filter { !it.isDone }
-        val manager = NotificationManagerCompat.from(context)
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            val granted = ContextCompat.checkSelfPermission(
-                context, Manifest.permission.POST_NOTIFICATIONS
-            ) == PackageManager.PERMISSION_GRANTED
-            if (!granted) return
-        }
-
-        if (pending.isEmpty()) {
-            manager.cancel(NOTIFICATION_ID)
-            return
-        }
-
         val visible = pending.take(7)
-        val body = buildString {
+        val body = if (visible.isEmpty()) {
+            "할일을 추가해보세요"
+        } else buildString {
             visible.forEachIndexed { idx, t ->
                 append("• ")
                 append(t.title)
@@ -65,18 +51,21 @@ object LockscreenNotification {
             }
         }
 
+        val title = if (pending.isEmpty()) "잊지마 할일"
+        else "잊지마 할일 (${pending.size}개)"
+
         val openIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
-        val pending1 = PendingIntent.getActivity(
+        val contentPi = PendingIntent.getActivity(
             context, 1, openIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val notif = NotificationCompat.Builder(context, CHANNEL_ID)
+        return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("잊지마 할일 (${pending.size}개)")
-            .setContentText(visible.first().title)
+            .setContentTitle(title)
+            .setContentText(visible.firstOrNull()?.title ?: "할일을 추가해보세요")
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
@@ -84,9 +73,12 @@ object LockscreenNotification {
             .setAutoCancel(false)
             .setShowWhen(false)
             .setSilent(true)
-            .setContentIntent(pending1)
+            .setContentIntent(contentPi)
             .build()
+    }
 
-        manager.notify(NOTIFICATION_ID, notif)
+    fun update(context: Context, tasks: List<Task>) {
+        NotificationManagerCompat.from(context)
+            .notify(NOTIFICATION_ID, build(context, tasks))
     }
 }

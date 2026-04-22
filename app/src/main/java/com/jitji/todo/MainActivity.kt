@@ -8,6 +8,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.provider.Settings
 import android.text.Editable
 import android.text.TextWatcher
@@ -78,6 +79,8 @@ class MainActivity : AppCompatActivity() {
 
         requestNotificationPermissionIfNeeded()
         ensureExactAlarmPermission()
+        LockscreenService.start(this)
+        promptBatteryOptimizationIfNeeded()
     }
 
     private fun enableShowOnLockscreen() {
@@ -124,7 +127,34 @@ class MainActivity : AppCompatActivity() {
         return when (item.itemId) {
             R.id.action_check_update -> { checkUpdate(); true }
             R.id.action_clear_done -> { viewModel.deleteCompleted(); true }
+            R.id.action_battery_opt -> { openBatterySettings(); true }
             else -> super.onOptionsItemSelected(item)
+        }
+    }
+
+    private fun promptBatteryOptimizationIfNeeded() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        if (pm.isIgnoringBatteryOptimizations(packageName)) return
+        AlertDialog.Builder(this)
+            .setTitle(R.string.battery_opt_title)
+            .setMessage(R.string.battery_opt_message)
+            .setPositiveButton(R.string.open_settings) { _, _ -> openBatterySettings() }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun openBatterySettings() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
+        runCatching {
+            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+            intent.data = Uri.parse("package:$packageName")
+            startActivity(intent)
+        }.onFailure {
+            runCatching {
+                val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                startActivity(intent)
+            }
         }
     }
 
