@@ -29,4 +29,6 @@
     <string name="battery_opt_title">배터리 최적화 해제</string>
     <string name="battery_opt_message">잠금화면에 할일을 계속 표시하려면 배터리 최적화 대상에서 이 앱을 제외해주세요. 그래야 시스템이 앱을 강제로 종료하지 않습니다.</string>
     <string name="battery_opt_menu">백그라운드 실행 허용</string>
+    <string name="set_as_home">기본 홈화면으로 설정</string>
+    <string name="set_as_home_message">홈 버튼을 누르면 항상 이 앱이 뜨게 하려면 기본 홈 앱으로 지정해주세요.</string>
 </resources>

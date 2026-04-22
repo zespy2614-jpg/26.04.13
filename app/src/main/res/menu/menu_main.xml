@@ -8,6 +8,11 @@
         app:showAsAction="never" />
 
     <item
+        android:id="@+id/action_set_home"
+        android:title="@string/set_as_home"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/action_battery_opt"
         android:title="@string/battery_opt_menu"
         app:showAsAction="never" />

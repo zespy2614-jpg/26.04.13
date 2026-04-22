@@ -82,6 +82,7 @@ class MainActivity : AppCompatActivity() {
         LockscreenService.start(this)
         ServiceWatchdog.scheduleHeartbeat(this)
         promptBatteryOptimizationIfNeeded()
+        promptHomeAppIfNeeded()
     }
 
     override fun onResume() {
@@ -134,8 +135,53 @@ class MainActivity : AppCompatActivity() {
             R.id.action_check_update -> { checkUpdate(); true }
             R.id.action_clear_done -> { viewModel.deleteCompleted(); true }
             R.id.action_battery_opt -> { openBatterySettings(); true }
+            R.id.action_set_home -> { openHomeAppChooser(); true }
             else -> super.onOptionsItemSelected(item)
         }
+    }
+
+    private fun openHomeAppChooser() {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.set_as_home)
+            .setMessage(R.string.set_as_home_message)
+            .setPositiveButton(R.string.open_settings) { _, _ ->
+                runCatching {
+                    startActivity(Intent(Settings.ACTION_HOME_SETTINGS))
+                }.onFailure {
+                    runCatching {
+                        val intent = Intent(Intent.ACTION_MAIN)
+                        intent.addCategory(Intent.CATEGORY_HOME)
+                        startActivity(Intent.createChooser(intent, "홈 앱 선택"))
+                    }
+                }
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun promptHomeAppIfNeeded() {
+        if (isDefaultHome()) return
+        val prefs = getSharedPreferences("jitji", MODE_PRIVATE)
+        val prompted = prefs.getBoolean("home_prompted", false)
+        if (prompted) return
+        prefs.edit().putBoolean("home_prompted", true).apply()
+        openHomeAppChooser()
+    }
+
+    override fun onBackPressed() {
+        if (isDefaultHome()) {
+            moveTaskToBack(true)
+            return
+        }
+        super.onBackPressed()
+    }
+
+    private fun isDefaultHome(): Boolean {
+        val intent = Intent(Intent.ACTION_MAIN).apply {
+            addCategory(Intent.CATEGORY_HOME)
+        }
+        val resolve = packageManager.resolveActivity(intent, 0) ?: return false
+        return resolve.activityInfo.packageName == packageName
     }
 
     private fun promptBatteryOptimizationIfNeeded() {
