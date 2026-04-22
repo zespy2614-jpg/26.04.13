@@ -288,36 +288,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun beginDownload(info: UpdateInfo) {
-        UpdateChecker.startDownload(
-            context = this,
-            info = info,
-            onDownloaded = { file ->
-                runOnUiThread {
-                    if (!UpdateChecker.canInstallPackages(this)) {
-                        AlertDialog.Builder(this)
-                            .setMessage(R.string.install_permission_needed)
-                            .setPositiveButton(R.string.open_settings) { _, _ ->
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                    val intent = Intent(
-                                        Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                                        Uri.parse("package:$packageName")
-                                    )
-                                    installPermissionLauncher.launch(intent)
-                                }
-                            }
-                            .setNegativeButton(R.string.cancel, null)
-                            .show()
-                        return@runOnUiThread
-                    }
-                    UpdateChecker.launchInstaller(this, file)
-                }
-            },
-            onError = { msg ->
-                runOnUiThread {
-                    Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
-                }
-            }
-        )
-        Toast.makeText(this, "다운로드를 시작했어요.", Toast.LENGTH_SHORT).show()
+        runCatching {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(info.downloadUrl))
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(intent)
+        }.onFailure { e ->
+            Toast.makeText(this, "브라우저 열기 실패: ${e.message}", Toast.LENGTH_LONG).show()
+        }
     }
 }
