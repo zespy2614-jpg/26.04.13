@@ -82,7 +82,29 @@ class MainActivity : AppCompatActivity() {
         LockscreenService.start(this)
         ServiceWatchdog.scheduleHeartbeat(this)
         promptBatteryOptimizationIfNeeded()
-        promptRevertHomeIfNeeded()
+        promptOverlayPermissionIfNeeded()
+    }
+
+    private fun promptOverlayPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
+        if (Settings.canDrawOverlays(this)) return
+        AlertDialog.Builder(this)
+            .setTitle("다른 앱 위에 표시 권한")
+            .setMessage(
+                "전원 버튼으로 화면을 켤 때 앱이 자동으로 뜨려면 " +
+                    "'다른 앱 위에 표시' 권한이 필요해요. 설정에서 허용해주세요."
+            )
+            .setPositiveButton("설정 열기") { _, _ ->
+                runCatching {
+                    val intent = Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:$packageName")
+                    )
+                    startActivity(intent)
+                }
+            }
+            .setNegativeButton("나중에", null)
+            .show()
     }
 
     private fun promptRevertHomeIfNeeded() {
