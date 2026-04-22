@@ -19,9 +19,11 @@ class BootReceiver : BroadcastReceiver() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val repo = TaskRepository(appContext)
-                repo.allPending().forEach { task ->
+                val pendingTasks = repo.allPending()
+                pendingTasks.forEach { task ->
                     ReminderScheduler.schedule(appContext, task)
                 }
+                LockscreenNotification.refresh(appContext, pendingTasks)
             } finally {
                 pending.finish()
             }

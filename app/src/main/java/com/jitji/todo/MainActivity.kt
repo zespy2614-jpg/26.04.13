@@ -11,11 +11,12 @@ import android.os.Bundle
 import android.provider.Settings
 import android.text.Editable
 import android.text.TextWatcher
+import android.view.Menu
+import android.view.MenuItem
 import android.view.View
 import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
-import android.widget.PopupMenu
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -46,6 +47,7 @@ class MainActivity : AppCompatActivity() {
         enableShowOnLockscreen()
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        setSupportActionBar(binding.toolbar)
 
         adapter = TaskAdapter(
             onToggle = { viewModel.toggleDone(it) },
@@ -73,7 +75,6 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.buttonAdd.setOnClickListener { submitNewTask() }
-        binding.buttonMenu.setOnClickListener { showMenu(it) }
 
         requestNotificationPermissionIfNeeded()
         ensureExactAlarmPermission()
@@ -114,17 +115,17 @@ class MainActivity : AppCompatActivity() {
         imm.hideSoftInputFromWindow(binding.editInput.windowToken, 0)
     }
 
-    private fun showMenu(anchor: View) {
-        val popup = PopupMenu(this, anchor)
-        popup.menuInflater.inflate(R.menu.menu_main, popup.menu)
-        popup.setOnMenuItemClickListener { item ->
-            when (item.itemId) {
-                R.id.action_clear_done -> { viewModel.deleteCompleted(); true }
-                R.id.action_check_update -> { checkUpdate(); true }
-                else -> false
-            }
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        menuInflater.inflate(R.menu.menu_main, menu)
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.action_check_update -> { checkUpdate(); true }
+            R.id.action_clear_done -> { viewModel.deleteCompleted(); true }
+            else -> super.onOptionsItemSelected(item)
         }
-        popup.show()
     }
 
     private fun confirmDelete(task: Task) {

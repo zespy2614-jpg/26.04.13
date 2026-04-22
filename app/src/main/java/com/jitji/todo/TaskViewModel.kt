@@ -3,6 +3,7 @@ package com.jitji.todo
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
+import androidx.lifecycle.Observer
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -11,6 +12,19 @@ class TaskViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repo = TaskRepository(app)
     val tasks: LiveData<List<Task>> = repo.observeAll()
+
+    private val notificationObserver = Observer<List<Task>> { list ->
+        LockscreenNotification.refresh(getApplication(), list)
+    }
+
+    init {
+        tasks.observeForever(notificationObserver)
+    }
+
+    override fun onCleared() {
+        tasks.removeObserver(notificationObserver)
+        super.onCleared()
+    }
 
     fun save(task: Task, onSaved: (Long) -> Unit = {}) {
         viewModelScope.launch(Dispatchers.IO) {
