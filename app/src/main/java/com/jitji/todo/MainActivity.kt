@@ -2,22 +2,32 @@ package com.jitji.todo
 
 import android.Manifest
 import android.app.AlarmManager
+import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
-import android.view.Menu
-import android.view.MenuItem
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.View
+import android.view.WindowManager
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
+import android.widget.PopupMenu
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
-import com.google.android.material.snackbar.Snackbar
 import com.jitji.todo.databinding.ActivityMainBinding
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : AppCompatActivity() {
 
@@ -26,18 +36,21 @@ class MainActivity : AppCompatActivity() {
     private lateinit var adapter: TaskAdapter
 
     private val notificationPermissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* ignore result */ }
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
+    private val installPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableShowOnLockscreen()
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        setSupportActionBar(binding.toolbar)
 
         adapter = TaskAdapter(
-            onToggle = { task -> viewModel.toggleDone(task) },
-            onClick = { task -> openEdit(task.id) },
-            onDelete = { task -> confirmDelete(task) }
+            onToggle = { viewModel.toggleDone(it) },
+            onClick = { openEdit(it.id) },
+            onDelete = { confirmDelete(it) }
         )
         binding.recycler.layoutManager = LinearLayoutManager(this)
         binding.recycler.adapter = adapter
@@ -47,34 +60,79 @@ class MainActivity : AppCompatActivity() {
             binding.emptyView.visibility = if (list.isEmpty()) View.VISIBLE else View.GONE
         }
 
-        binding.fabAdd.setOnClickListener { openEdit(0L) }
+        binding.editInput.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                binding.buttonAdd.isEnabled = !s.isNullOrBlank()
+            }
+            override fun afterTextChanged(s: Editable?) {}
+        })
+
+        binding.editInput.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_DONE) { submitNewTask(); true } else false
+        }
+
+        binding.buttonAdd.setOnClickListener { submitNewTask() }
+        binding.buttonMenu.setOnClickListener { showMenu(it) }
 
         requestNotificationPermissionIfNeeded()
         ensureExactAlarmPermission()
     }
 
-    override fun onCreateOptionsMenu(menu: Menu): Boolean {
-        menuInflater.inflate(R.menu.menu_main, menu)
-        return true
+    private fun enableShowOnLockscreen() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        } else {
+            @Suppress("DEPRECATION")
+            window.addFlags(
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+            )
+        }
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            val km = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+            if (km.isKeyguardLocked) {
+                km.requestDismissKeyguard(this, null)
+            }
+        }
     }
 
-    override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        return when (item.itemId) {
-            R.id.action_clear_done -> {
-                viewModel.deleteCompleted()
-                Snackbar.make(binding.root, "완료된 할일을 정리했어요", Snackbar.LENGTH_SHORT).show()
-                true
+    private fun submitNewTask() {
+        val title = binding.editInput.text?.toString()?.trim().orEmpty()
+        if (title.isEmpty()) return
+        val task = Task(title = title)
+        viewModel.save(task)
+        binding.editInput.text?.clear()
+        hideKeyboard()
+    }
+
+    private fun hideKeyboard() {
+        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        imm.hideSoftInputFromWindow(binding.editInput.windowToken, 0)
+    }
+
+    private fun showMenu(anchor: View) {
+        val popup = PopupMenu(this, anchor)
+        popup.menuInflater.inflate(R.menu.menu_main, popup.menu)
+        popup.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                R.id.action_clear_done -> { viewModel.deleteCompleted(); true }
+                R.id.action_check_update -> { checkUpdate(); true }
+                else -> false
             }
-            else -> super.onOptionsItemSelected(item)
         }
+        popup.show()
     }
 
     private fun confirmDelete(task: Task) {
         AlertDialog.Builder(this)
-            .setTitle("삭제")
+            .setTitle(R.string.delete)
             .setMessage("'${task.title}'을(를) 삭제할까요?")
-            .setPositiveButton("삭제") { _, _ -> viewModel.delete(task) }
-            .setNegativeButton("취소", null)
+            .setPositiveButton(R.string.delete) { _, _ -> viewModel.delete(task) }
+            .setNegativeButton(R.string.cancel, null)
             .show()
     }
 
@@ -86,7 +144,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun requestNotificationPermissionIfNeeded() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            if (ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
         }
     }
 
@@ -94,17 +158,83 @@ class MainActivity : AppCompatActivity() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
         val am = getSystemService(Context.ALARM_SERVICE) as AlarmManager
         if (am.canScheduleExactAlarms()) return
-        AlertDialog.Builder(this)
-            .setTitle("정확한 알림 허용")
-            .setMessage("설정한 시간에 정확히 알려드리려면 '정확한 알람' 권한이 필요해요.")
-            .setPositiveButton("설정 열기") { _, _ ->
-                runCatching {
-                    val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
-                    intent.data = Uri.parse("package:$packageName")
-                    startActivity(intent)
+        runCatching {
+            val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+            intent.data = Uri.parse("package:$packageName")
+            startActivity(intent)
+        }
+    }
+
+    private fun checkUpdate() {
+        val progress = AlertDialog.Builder(this)
+            .setMessage(R.string.checking_update)
+            .setCancelable(false)
+            .create()
+        progress.show()
+
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) { UpdateChecker.fetchLatest() }
+            progress.dismiss()
+            result.onSuccess { info ->
+                val current = UpdateChecker.currentVersion()
+                if (info.versionCode <= current) {
+                    Toast.makeText(
+                        this@MainActivity,
+                        getString(R.string.latest_version, current),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    return@onSuccess
+                }
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle(R.string.check_update)
+                    .setMessage(
+                        getString(R.string.update_available, info.versionCode) +
+                            "\n\n" + info.body.take(400)
+                    )
+                    .setPositiveButton(R.string.download) { _, _ -> beginDownload(info) }
+                    .setNegativeButton(R.string.cancel, null)
+                    .show()
+            }.onFailure { e ->
+                Toast.makeText(
+                    this@MainActivity,
+                    "업데이트 확인 실패: ${e.message}",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    private fun beginDownload(info: UpdateInfo) {
+        UpdateChecker.startDownload(
+            context = this,
+            info = info,
+            onDownloaded = { file ->
+                runOnUiThread {
+                    if (!UpdateChecker.canInstallPackages(this)) {
+                        AlertDialog.Builder(this)
+                            .setMessage(R.string.install_permission_needed)
+                            .setPositiveButton(R.string.open_settings) { _, _ ->
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                    val intent = Intent(
+                                        Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                                        Uri.parse("package:$packageName")
+                                    )
+                                    installPermissionLauncher.launch(intent)
+                                }
+                            }
+                            .setNegativeButton(R.string.cancel, null)
+                            .show()
+                        return@runOnUiThread
+                    }
+                    UpdateChecker.launchInstaller(this, file)
+                }
+            },
+            onError = { msg ->
+                runOnUiThread {
+                    Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
                 }
             }
-            .setNegativeButton("나중에", null)
-            .show()
+        )
+        Toast.makeText(this, "다운로드를 시작했어요.", Toast.LENGTH_SHORT).show()
     }
 }

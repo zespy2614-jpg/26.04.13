@@ -8,16 +8,22 @@ android {
     namespace = "com.jitji.todo"
     compileSdk = 34
 
+    val buildNumber = System.getenv("BUILD_NUMBER")?.toIntOrNull() ?: 1
+
     defaultConfig {
         applicationId = "com.jitji.todo"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = buildNumber
+        versionName = "1.0.$buildNumber"
+
+        buildConfigField("String", "REPO_OWNER", "\"zespy2614-jpg\"")
+        buildConfigField("String", "REPO_NAME", "\"26.04.13\"")
     }
 
     buildFeatures {
         viewBinding = true
+        buildConfig = true
     }
 
     buildTypes {
