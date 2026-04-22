@@ -80,7 +80,13 @@ class MainActivity : AppCompatActivity() {
         requestNotificationPermissionIfNeeded()
         ensureExactAlarmPermission()
         LockscreenService.start(this)
+        ServiceWatchdog.scheduleHeartbeat(this)
         promptBatteryOptimizationIfNeeded()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        LockscreenService.start(this)
     }
 
     private fun enableShowOnLockscreen() {

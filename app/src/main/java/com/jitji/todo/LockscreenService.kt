@@ -42,8 +42,7 @@ class LockscreenService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        val restartIntent = Intent(applicationContext, LockscreenService::class.java)
-        startService(restartIntent)
+        ServiceWatchdog.scheduleImmediateRestart(applicationContext)
         super.onTaskRemoved(rootIntent)
     }
 
@@ -51,6 +50,7 @@ class LockscreenService : Service() {
         if (::tasksLive.isInitialized) {
             tasksLive.removeObserver(observer)
         }
+        ServiceWatchdog.scheduleImmediateRestart(applicationContext)
         super.onDestroy()
     }
 
